@@ -1,0 +1,6 @@
+batch_size: 2
+data_path: "/hz/data/pointcloud/train/"
+num_workers: 8
+#model: 'pointMLP_hz'
+model: 'pointMLPElite_hz'
+sample_groups: 512
