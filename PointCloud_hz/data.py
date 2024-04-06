@@ -104,7 +104,7 @@ class TeethPointCloudData(Dataset):
         list_files = os.listdir(osp.join(path, 'meshes'))
         all_data = []
         all_labels = []
-        for i in list_files[:20]:
+        for i in list_files:
             teeth_mesh = mesh.Mesh.from_file(osp.join(path, 'meshes', i))
             xyz = torch.from_numpy(teeth_mesh.centroids[np.newaxis, :, :]).to(self.device)
             if 'cpu' == self.device:
