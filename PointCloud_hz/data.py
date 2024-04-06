@@ -119,7 +119,7 @@ class TeethPointCloudData(Dataset):
             # vectors = teeth_mesh.vectors
             # data = np.concatenate([vectors, normals[:, :, np.newaxis]], axis=-1)
             all_data.append((xyz, normals))
-            label = np.loadtxt(osp.join(path, 'labels', i.split('.')[0] + '.txt'))
+            label = np.loadtxt(osp.join(path, 'labels', i.split('.')[0] + '.txt'), dtype=np.float32)
             all_labels.append(label)
         return all_data, all_labels
 

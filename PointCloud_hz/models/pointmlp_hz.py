@@ -168,7 +168,7 @@ class LocalGrouper(nn.Module):
             self.affine_alpha = nn.Parameter(torch.ones([1,1,1,channel + add_channel]))
             self.affine_beta = nn.Parameter(torch.zeros([1, 1, 1, channel + add_channel]))
 
-    def forward(self, xyz, points, normals):
+    def forward(self, xyz, normals):
         B, N, C = xyz.shape
         S = self.groups
         xyz = xyz.contiguous()  # xyz [batch, points, xyz]
@@ -199,12 +199,12 @@ class LocalGrouper(nn.Module):
                 mean = mean.unsqueeze(dim=-2)  # [B, npoint, 1, d+3]
             std = torch.std((grouped_normals-mean).reshape(B,-1),dim=-1,keepdim=True).unsqueeze(dim=-1).unsqueeze(dim=-1)
             grouped_normals = (grouped_normals-mean)/(std + 1e-5)
-            grouped_normals = self.affine_alpha*grouped_normals + self.affine_beta
+            # grouped_normals = self.affine_alpha*grouped_normals + self.affine_beta
 
         # knn的12个点的feature与中心点的feature concat在一起返回
-        new_points = torch.cat([grouped_normals, normals.unsqueeze(dim=-2).repeat(1, 1, self.kneighbors, 1)], dim=-1)
+        new_normals = torch.cat([grouped_normals, normals.unsqueeze(dim=-2).repeat(1, 1, self.kneighbors, 1)], dim=-1)
         # xyz是原始点
-        return xyz, new_points
+        return new_normals
 
 
 class ConvBNReLU1D(nn.Module):
@@ -303,13 +303,13 @@ class PosExtraction(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, points=1024, class_num=40, embed_dim=64, groups=1, res_expansion=1.0,
+    def __init__(self, points=1024, global_normals_size=3, embed_dim=64, groups=1, res_expansion=1.0,
                  activation="relu", bias=False, use_xyz=True, normalize="center",
                  dim_expansion=[2, 2, 2, 2], pre_blocks=[2, 2, 2, 2], pos_blocks=[2, 2, 2, 2],
                  k_neighbors=[32, 32, 32, 32], reducers=[2, 2, 2, 2], **kwargs):
         super(Model, self).__init__()
         self.stages = len(pre_blocks)
-        self.class_num = class_num
+        self.global_normals_size = global_normals_size
         self.points = points
         self.embedding = ConvBNReLU1D(3, embed_dim, bias=bias, activation=activation)
         assert len(pre_blocks) == len(k_neighbors) == len(reducers) == len(pos_blocks) == len(dim_expansion), \
@@ -343,25 +343,25 @@ class Model(nn.Module):
 
         self.act = get_activation(activation)
         self.classifier = nn.Sequential(
-            nn.Linear(last_channel, 512),
-            nn.BatchNorm1d(512),
-            self.act,
-            nn.Dropout(0.5),
-            nn.Linear(512, 256),
+            nn.Linear(last_channel, 256),
             nn.BatchNorm1d(256),
             self.act,
             nn.Dropout(0.5),
-            nn.Linear(256, self.class_num)
+            nn.Linear(256, 128),
+            nn.BatchNorm1d(128),
+            self.act,
+            nn.Dropout(0.5),
+            nn.Linear(128, self.global_normals_size)
         )
 
     def forward(self, data, normals):
         xyz = data.permute(0, 2, 1)
         batch_size, _, _ = data.size()
-        data = self.embedding(data)  # B,D,N
-        normals = self.embedding(normals)
+        # data = self.embedding(data)  # B,D,N
+        data = self.embedding(normals)
         for i in range(self.stages):
             # Give xyz[b, p, 3] and fea[b, p, d], return new_xyz[b, g, 3] and new_fea[b, g, k, d]
-            xyz, data = self.local_grouper_list[i](xyz, data.permute(0, 2, 1), normals.permute(0, 2, 1))  # [b,g,3]  [b,g,k,d]
+            data = self.local_grouper_list[i](xyz, data.permute(0, 2, 1))  # [b,g,3]  [b,g,k,d]
             data = self.pre_blocks_list[i](data)  # [b,d,g]
             data = self.pos_blocks_list[i](data)  # [b,d,g]
 
@@ -381,10 +381,10 @@ def pointMLP_hz(num_classes=40, **kwargs) -> Model:
 
 
 def pointMLPElite_hz(num_classes=40, **kwargs) -> Model:
-    return Model(points=512, class_num=num_classes, embed_dim=32, groups=1, res_expansion=0.25,
-                   activation="relu", bias=False, use_xyz=False, normalize="anchor",
+    return Model(points=2048, class_num=num_classes, embed_dim=32, groups=1, res_expansion=0.25,
+                   activation="relu", bias=False, use_xyz=False, normalize="center",
                    dim_expansion=[2, 2, 2, 1], pre_blocks=[1, 1, 2, 1], pos_blocks=[1, 1, 2, 1],
-                   k_neighbors=[12,12,12,12], reducers=[2, 2, 2, 2], **kwargs)
+                   k_neighbors=[24,24,24,24], reducers=[2, 2, 2, 2], **kwargs)
 
 if __name__ == '__main__':
     data = torch.rand(16, 3, 1024)
