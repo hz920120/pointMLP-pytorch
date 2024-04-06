@@ -93,18 +93,18 @@ class ModelNet40(Dataset):
 
 
 class TeethPointCloudData(Dataset):
-    def __init__(self, data_path, partition='train', sample_groups=4096, device='cuda'):
+    def __init__(self, args, partition='train', device='cuda'):
         self.partition = partition
-        self.sample_groups = sample_groups
+        self.sample_groups = args.get('sample_groups', 2048)
         self.device = device
-
+        data_path = args.data_path
         self.data, self.labels = self.load_teethpc(data_path)
 
     def load_teethpc(self, path):
         list_files = os.listdir(osp.join(path, 'meshes'))
         all_data = []
         all_labels = []
-        for i in list_files:
+        for i in list_files[:20]:
             teeth_mesh = mesh.Mesh.from_file(osp.join(path, 'meshes', i))
             xyz = torch.from_numpy(teeth_mesh.centroids[np.newaxis, :, :]).to(self.device)
             if 'cpu' == self.device:

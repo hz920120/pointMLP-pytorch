@@ -1,0 +1,13 @@
+checkpoint: null
+epoch: 300
+min_lr: 0.05
+weight_decay: 2e-4
+batch_size: 8
+data_path: "/hz/data/pointcloud/train/"
+num_workers: 8
+model: 'pointMLP_hz'
+sample_groups: 2048
+learning_rate: 0.05
+loss_weights_list: [0.8, 0.2]
+log_path: "/hz/code/pointmlp/PointCloud_hz/checkpoints"
+log_interval: 30

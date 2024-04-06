@@ -1,81 +1,72 @@
 import argparse
-import os
-import logging
 import datetime
+
 import torch
-import torch.nn as nn
 import torch.nn.parallel
-import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
-import numpy as np
-import yaml
-import models as models
+from fvcore.common.config import CfgNode
 from torch.utils.data import DataLoader
+from tqdm import tqdm
+
+import models as models
 from data import TeethPointCloudData
-from torch.optim.lr_scheduler import CosineAnnealingLR
-import torch.nn.functional as F
+from models.loss import cal_total_loss
+from utils.utils import LogWriter, save_checkpoint
 
 
 def parse_args():
     """Parameters"""
     parser = argparse.ArgumentParser('training')
-    parser.add_argument('-c', '--checkpoint', type=str, metavar='PATH',
-                        help='path to save checkpoint (default: checkpoint)')
     parser.add_argument('-cg', '--config', type=str, metavar='PATH',
                         help='path to save checkpoint (default: checkpoint)', default='configs/test_config_0331.yaml')
-    parser.add_argument('--msg', type=str, help='message after checkpoint')
-    parser.add_argument('--epoch', default=300, type=int, help='number of epoch in training')
-    parser.add_argument('--num_points', type=int, default=1024, help='Point Number')
-    parser.add_argument('--learning_rate', default=0.05, type=float, help='learning rate in training')
-    parser.add_argument('--min_lr', default=0.005, type=float, help='min lr')
-    parser.add_argument('--weight_decay', type=float, default=2e-4, help='decay rate')
-    parser.add_argument('--seed', type=int, help='random seed')
-
-    return parser.parse_args()
+    options = parser.parse_args()
+    opts = CfgNode(CfgNode.load_yaml_with_base('configs/base.yaml'))
+    opts.merge_from_file(options.config)
+    return opts
 
 
-def get_yaml(path):
-    rf = open(file=path, mode='r', encoding='utf-8')
-    crf = rf.read()
-    rf.close()
-    yaml_data = yaml.load(stream=crf, Loader=yaml.FullLoader)
-    return yaml_data
 
 
-def train(net, trainloader, optimizer, criterion, device):
+
+def train(net, trainloader, optimizer, criterion, device, args):
     net.train()
     train_loss = 0
+    l1_total = 0
+    cs_total = 0
     correct = 0
     total = 0
     train_pred = []
     train_true = []
     time_cost = datetime.datetime.now()
-    for batch_idx, ((data, normals), label) in enumerate(trainloader):
+    for batch_idx, ((data, normals), label) in enumerate(tqdm(trainloader)):
         data, normals, label = data.to(device), normals.to(device), label.to(device).squeeze()
         data = data.permute(0, 2, 1)  # so, the input data shape is [batch, 3, 4096]
         normals = normals.permute(0, 2, 1)  # so, the input data shape is [batch, 3, 4096]
         optimizer.zero_grad()
         logits = net(data, normals)
-        loss = criterion(logits, label)
-        loss.backward()
+        total_loss, l1_loss, cs_loss = criterion(logits, label, args.get('loss_weights_list', None))
+        total_loss.backward()
         # torch.nn.utils.clip_grad_norm_(net.parameters(), 1)
         optimizer.step()
-        train_loss += loss.item()
+        train_loss += total_loss.item()
+        l1_total += l1_loss.item()
+        cs_total += cs_loss.item()
 
-
-        # preds = logits.max(dim=1)[1]
-
-        # train_true.append(label.cpu().numpy())
-        # train_pred.append(preds.detach().cpu().numpy())
-
-        # total += label.size(0)
-        # correct += preds.eq(label).sum().item()
-        print('batch: {}/{}, loss: {:.4f}'.format(batch_idx, len(trainloader), loss.item()))
+        # if batch_idx % 10 == 0:
+        #     print(
+        #         'batch: {}/{}, total_loss: {:.4f}, l1_loss: {:.4f}, cs_loss: {:.4f}'.format(batch_idx, len(trainloader),
+        #                                                                                     total_loss.item(),
+        #                                                                                     l1_loss.item(),
+        #                                                                                     cs_loss.item()))
         # progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
         #              % (train_loss / (batch_idx + 1), 100. * correct / total, correct, total))
-    return train_loss / (batch_idx + 1)
+    return {
+        "total_loss": float("%.3f" % (train_loss / (batch_idx + 1))),
+        "l1_total": float("%.3f" % (l1_total / (batch_idx + 1))),
+        "cs_total": float("%.3f" % (cs_total / (batch_idx + 1)))
+            }
     #
     # time_cost = int((datetime.datetime.now() - time_cost).total_seconds())
     # train_true = np.concatenate(train_true)
@@ -88,53 +79,32 @@ def train(net, trainloader, optimizer, criterion, device):
     # }
 
 
-def cal_loss(pred, gt):
-    ''' Calculate cosine similarity loss '''
-    # B = pred.size(0)
-    # dot = torch.sum(torch.mul(pred,gt),dim=1)
-    # norm = torch.norm(pred,dim=1)
-    # sim = torch.sum((dot / norm))
-    similarity = F.cosine_similarity(pred, gt, dim=1)
-
-    loss = torch.sum(1 - similarity)
-
-    return loss
-
-def cal_loss_hinge(pred, gt):
-    ''' Calculate cosine similarity loss '''
-    # B = pred.size(0)
-    # dot = torch.sum(torch.mul(pred,gt),dim=1)
-    # norm = torch.norm(pred,dim=1)
-    # sim = torch.sum((dot / norm))
-    # hinge_loss = F.cosine_embedding_loss()
-    # loss = hinge_loss(pred,gt)
-
-    loss_f = nn.CosineEmbeddingLoss()
-    y = torch.ones(pred.size()[0]).to(pred.device)
-    loss = loss_f(pred, gt, y)
-    return loss
-
 def main():
     args = parse_args()
-    config = get_yaml(args.config)
     train_loader = DataLoader(
-        TeethPointCloudData(config.get('data_path', None), sample_groups=config.get('sample_groups', None)),
-        num_workers=config.get('num_workers', None),
-        batch_size=config.get('batch_size', None), shuffle=True, drop_last=True)
-    net = models.__dict__[config.get('model', None)]()
+        TeethPointCloudData(args),
+        num_workers=args.num_workers,
+        batch_size=args.batch_size, shuffle=True, drop_last=True)
+    net = models.__dict__[args.get('model', 'pointMLPElite_hz')]()
     device = 'cuda'
     net = net.to(device)
     # optimizer = torch.optim.SGD(net.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
     optimizer = torch.optim.SGD(net.parameters(), lr=args.learning_rate, momentum=0.9)
     start_epoch = 0
     # scheduler = CosineAnnealingLR(optimizer, args.epoch, eta_min=args.min_lr, last_epoch=start_epoch - 1)
-    criterion = cal_loss_hinge
-
+    criterion = cal_total_loss
+    writer = LogWriter(args.get('log_lath','./checkpoints/logs'))
     for epoch in range(start_epoch, args.epoch):
         print('Epoch(%d/%s) Learning Rate %s:' % (epoch + 1, args.epoch, optimizer.param_groups[0]['lr']))
-        train_loss = train(net, train_loader, optimizer, criterion, device)
-        print('Epoch {}/{}, train_loss: {:.4f}'.format(epoch + 1, args.epoch, train_loss))
+        loss_dict = train(net, train_loader, optimizer, criterion, device, args)
+        print('Epoch {}/{}, train_total_loss: {:.4f}, l1_total_loss: {:.4f}, cs_total_loss: {:.4f}'.format(epoch + 1, args.epoch,
+                                                                                               loss_dict['total_loss'], loss_dict['l1_total'],
+                                                                                               loss_dict['cs_total']))
+        writer.scalar_summary(loss_dict, epoch)
+        if (epoch+1) % args.log_interval == 0:
+            save_checkpoint(net.state_dict(), args.log_path, epoch, loss_dict['total_loss'])
         # scheduler.step()
+    writer.close()
 
 if __name__ == '__main__':
     main()
