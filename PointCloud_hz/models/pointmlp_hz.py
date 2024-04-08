@@ -168,7 +168,7 @@ class LocalGrouper(nn.Module):
             self.affine_alpha = nn.Parameter(torch.ones([1,1,1,channel + add_channel]))
             self.affine_beta = nn.Parameter(torch.zeros([1, 1, 1, channel + add_channel]))
 
-    def forward(self, xyz, normals):
+    def forward(self, xyz, normals, points):
         B, N, C = xyz.shape
         S = self.groups
         xyz = xyz.contiguous()  # xyz [batch, points, xyz]
@@ -189,7 +189,7 @@ class LocalGrouper(nn.Module):
         # grouped_points = index_points(points, idx)  # [B, npoint, k, d]
         grouped_normals = index_normals(normals, idx)
         if self.use_xyz:
-            grouped_points = torch.cat([grouped_normals, grouped_xyz],dim=-1)  # [B, npoint, k, d+3]
+            grouped_normals = torch.cat([grouped_normals, grouped_xyz],dim=-1)  # [B, npoint, k, d+3]
         if self.normalize is not None:
             if self.normalize =="center":
                 mean = torch.mean(grouped_normals, dim=2, keepdim=True)
@@ -202,9 +202,9 @@ class LocalGrouper(nn.Module):
             # grouped_normals = self.affine_alpha*grouped_normals + self.affine_beta
 
         # knn的12个点的feature与中心点的feature concat在一起返回
-        new_normals = torch.cat([grouped_normals, normals.unsqueeze(dim=-2).repeat(1, 1, self.kneighbors, 1)], dim=-1)
+        new_features = torch.cat([grouped_normals, points.unsqueeze(dim=-2).repeat(1, 1, self.kneighbors, 1)], dim=-1)
         # xyz是原始点
-        return new_normals
+        return new_features
 
 
 class ConvBNReLU1D(nn.Module):
@@ -357,11 +357,11 @@ class Model(nn.Module):
     def forward(self, data, normals):
         xyz = data.permute(0, 2, 1)
         batch_size, _, _ = data.size()
-        # data = self.embedding(data)  # B,D,N
+        points = self.embedding(data)  # B,D,N
         data = self.embedding(normals)
         for i in range(self.stages):
             # Give xyz[b, p, 3] and fea[b, p, d], return new_xyz[b, g, 3] and new_fea[b, g, k, d]
-            data = self.local_grouper_list[i](xyz, data.permute(0, 2, 1))  # [b,g,3]  [b,g,k,d]
+            data = self.local_grouper_list[i](xyz, data.permute(0, 2, 1), points.permute(0, 2, 1))  # [b,g,3]  [b,g,k,d]
             data = self.pre_blocks_list[i](data)  # [b,d,g]
             data = self.pos_blocks_list[i](data)  # [b,d,g]
 
@@ -380,9 +380,9 @@ def pointMLP_hz(num_classes=40, **kwargs) -> Model:
                    k_neighbors=[12, 12, 12, 12], reducers=[2, 2, 2, 2], **kwargs)
 
 
-def pointMLPElite_hz(num_classes=40, **kwargs) -> Model:
-    return Model(points=2048, class_num=num_classes, embed_dim=32, groups=1, res_expansion=0.25,
-                   activation="relu", bias=False, use_xyz=False, normalize="center",
+def pointMLPElite_hz(**kwargs) -> Model:
+    return Model(points=2048, global_normals_size=3, embed_dim=32, groups=1, res_expansion=0.25,
+                   activation="relu", bias=False, use_xyz=False, normalize="anchor",
                    dim_expansion=[2, 2, 2, 1], pre_blocks=[1, 1, 2, 1], pos_blocks=[1, 1, 2, 1],
                    k_neighbors=[24,24,24,24], reducers=[2, 2, 2, 2], **kwargs)
 

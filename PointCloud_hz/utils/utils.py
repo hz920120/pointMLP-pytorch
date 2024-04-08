@@ -2,11 +2,14 @@ import torch
 import os
 import yaml
 from torch.utils.tensorboard import SummaryWriter
+import torch.nn.functional as F
 
 
 class LogWriter:
-    def __init__(self, log_dir):
-        self.writer = SummaryWriter(log_dir)
+    def __init__(self, log_dir, model_name):
+        dir = os.path.join(log_dir, model_name, 'logs')
+        os.makedirs(dir, exist_ok=True)
+        self.writer = SummaryWriter(dir)
 
     def scalar_summary(self, loss_dict: dict, step):
         for k in loss_dict.keys():
@@ -15,9 +18,16 @@ class LogWriter:
     def close(self):
         self.writer.close()
 
-def save_checkpoint(state, path, epoch, total_loss):
-    os.makedirs(path, exist_ok=True)
-    torch.save(state, os.path.join(path, 'checkpoint'+'_{}_{:.2f}.pth').format(epoch, total_loss))
+
+def save_checkpoint(model, path, model_name, epoch, total_loss):
+    pth = {
+        'epoch': epoch,
+        'net': model.state_dict(),
+        'total_loss': total_loss
+    }
+    save_path = os.path.join(path, model_name)
+    os.makedirs(save_path, exist_ok=True)
+    torch.save(pth, os.path.join(save_path, 'checkpoint' + '_{}_{:.2f}.pth').format(epoch, total_loss))
 
 
 def get_yaml(path):
@@ -26,3 +36,18 @@ def get_yaml(path):
     rf.close()
     yaml_data = yaml.load(stream=crf, Loader=yaml.FullLoader)
     return yaml_data
+
+
+def get_total_params(model):
+    return sum(p.numel() for p in model.parameters())
+
+
+def get_total_trainable_params(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def cal_cossim(pred, gt):
+    ''' Calculate cosine similarity '''
+    norm = torch.norm(pred, dim=1)
+    score = F.cosine_similarity(pred / norm[:, None], gt, dim=1)
+    return score

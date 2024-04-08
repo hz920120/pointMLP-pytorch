@@ -8,9 +8,7 @@ from stl import mesh
 
 from torch.utils.data import Dataset
 from pointnet2_ops import pointnet2_utils
-from part_segmentation.model.pointMLP import farthest_point_sample
-
-from PointCloud_hz.util import Read_stl
+import random
 
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
@@ -93,19 +91,29 @@ class ModelNet40(Dataset):
 
 
 class TeethPointCloudData(Dataset):
-    def __init__(self, args, partition='train', device='cuda'):
+    def __init__(self, args, partition='train', device='cuda', split_factor=0.9):
         self.partition = partition
+        self.split_factor = split_factor
+        self.split_data(args.data_path)
         self.sample_groups = args.get('sample_groups', 2048)
         self.device = device
-        data_path = args.data_path
-        self.data, self.labels = self.load_teethpc(data_path)
+        self.path = args.data_path
+        self.data, self.labels = self.load_teethpc()
 
-    def load_teethpc(self, path):
+    def split_data(self, path):
         list_files = os.listdir(osp.join(path, 'meshes'))
+        random.shuffle(list_files)
+        split_index = int(len(list_files) * self.split_factor)
+        self.train_data = list_files[:split_index]
+        self.test_data = list_files[split_index:]
+
+
+    def load_teethpc(self):
+        list_files = self.train_data if self.partition == 'train' else self.test_data
         all_data = []
         all_labels = []
         for i in list_files:
-            teeth_mesh = mesh.Mesh.from_file(osp.join(path, 'meshes', i))
+            teeth_mesh = mesh.Mesh.from_file(osp.join(self.path, 'meshes', i))
             xyz = torch.from_numpy(teeth_mesh.centroids[np.newaxis, :, :]).to(self.device)
             if 'cpu' == self.device:
                 fps_idx = self.farthest_point_sample(xyz, self.sample_groups)
@@ -114,14 +122,17 @@ class TeethPointCloudData(Dataset):
             xyz = self.index_points(xyz, fps_idx).squeeze(0).detach().cpu().numpy()
             normals = self.index_points(torch.from_numpy(teeth_mesh.normals[np.newaxis, :, :].copy()), fps_idx).squeeze(
                 0).detach().cpu().numpy()
+            # self.save_pc(xyz)
             # coord_vertices, coord_normals, _ = Read_stl(osp.join(path, i))
             # normals = teeth_mesh.normals
             # vectors = teeth_mesh.vectors
             # data = np.concatenate([vectors, normals[:, :, np.newaxis]], axis=-1)
             all_data.append((xyz, normals))
-            label = np.loadtxt(osp.join(path, 'labels', i.split('.')[0] + '.txt'), dtype=np.float32)
+            label = np.loadtxt(osp.join(self.path, 'labels', i.split('.')[0] + '.txt'), dtype=np.float32)
             all_labels.append(label)
         return all_data, all_labels
+    def save_pc(self, points):
+        np.savetxt('/hz/code/pointmlp/PointCloud_hz/checkpoints/data1.txt', points)
 
     def index_points(self, points, idx):
         """
