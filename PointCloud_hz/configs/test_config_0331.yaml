@@ -2,7 +2,7 @@ batch_size: 2
 data_path: "/hz/data/pointcloud/train/"
 #model: 'pointMLP_hz'
 model: 'pointMLPElite_hz'
-sample_groups: 2048
+sample_groups: 4096
 learning_rate: 0.05
 epoch: 500
 model_name: "20240408_usexyz"

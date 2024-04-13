@@ -18,7 +18,7 @@ def parse_args():
     """Parameters"""
     parser = argparse.ArgumentParser('training')
     parser.add_argument('-cg', '--config', type=str, metavar='PATH',
-                        help='path to save checkpoint (default: checkpoint)', default='configs/test_config_0331.yaml')
+                        help='path to save checkpoint (default: checkpoint)', default='configs/test_config_0408.yaml')
     options = parser.parse_args()
     opts = CfgNode(CfgNode.load_yaml_with_base('configs/base.yaml'))
     opts.merge_from_file(options.config)
@@ -56,16 +56,16 @@ def main():
         batch_size=args.batch_size, shuffle=False, drop_last=False)
     # Model
     print('==> Building model..')
-    net = models.__dict__[args.model]()
+    net = models.__dict__[args.model](args.sample_groups)
     net = net.to(device)
     # checkpoint_path = os.path.join(args.checkpoint, 'best_checkpoint.pth')
-    checkpoint_path = "/hz/code/pointmlp/PointCloud_hz/checkpoints/20240407/checkpoint_499_0.55.pth"
+    checkpoint_path = "/hz/code/pointmlp/PointCloud_hz/checkpoints/20240410_catpoints_avgpool/checkpoint_539_2.66.pth"
     checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
     # criterion = criterion.to(device)
     if device == 'cuda':
         net = torch.nn.DataParallel(net)
         cudnn.benchmark = True
-    net.load_state_dict(checkpoint, strict=False)
+    net.load_state_dict(checkpoint['net'], strict=False)
 
     test_out = validate(net, test_loader, device)
 

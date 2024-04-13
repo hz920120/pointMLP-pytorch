@@ -261,7 +261,8 @@ class PreExtraction(nn.Module):
         :param blocks:
         """
         super(PreExtraction, self).__init__()
-        in_channels = 3+2*channels if use_xyz else 2*channels
+        # in_channels = 3+2*channels if use_xyz else 2*channels
+        in_channels = 3+2*channels if use_xyz else (channels+32)
         self.transfer = ConvBNReLU1D(in_channels, out_channels, bias=bias, activation=activation)
         operation = []
         for _ in range(blocks):
@@ -278,7 +279,9 @@ class PreExtraction(nn.Module):
         x = self.transfer(x)
         batch_size, _, _ = x.size()
         x = self.operation(x)  # [b, d, k]
-        x = F.adaptive_max_pool1d(x, 1).view(batch_size, -1)
+        #TODO 切换为平均池化？
+        # x = F.adaptive_max_pool1d(x, 1).view(batch_size, -1)
+        x = torch.mean(x, 2,keepdim=True).view(batch_size, -1)
         x = x.reshape(b, n, -1).permute(0, 2, 1)
         return x
 
@@ -320,7 +323,7 @@ class Model(nn.Module):
         last_channel = embed_dim
         anchor_points = self.points
         for i in range(len(pre_blocks)):
-            out_channel = last_channel * dim_expansion[i]
+            out_channel = last_channel + 32
             pre_block_num = pre_blocks[i]
             pos_block_num = pos_blocks[i]
             kneighbor = k_neighbors[i]
@@ -372,16 +375,16 @@ class Model(nn.Module):
 
 
 
-def pointMLP_hz(num_classes=40, **kwargs) -> Model:
+def pointMLP_hz(points, **kwargs) -> Model:
     print(1)
-    return Model(points=4096, class_num=num_classes, embed_dim=64, groups=1, res_expansion=1.0,
+    return Model(points=points, global_normals_size=3, embed_dim=64, groups=1, res_expansion=1.0,
                    activation="relu", bias=False, use_xyz=False, normalize="anchor",
                    dim_expansion=[2, 2, 2, 2], pre_blocks=[2, 2, 2, 2], pos_blocks=[2, 2, 2, 2],
                    k_neighbors=[12, 12, 12, 12], reducers=[2, 2, 2, 2], **kwargs)
 
 
-def pointMLPElite_hz(**kwargs) -> Model:
-    return Model(points=2048, global_normals_size=3, embed_dim=32, groups=1, res_expansion=0.25,
+def pointMLPElite_hz(points, **kwargs) -> Model:
+    return Model(points=points, global_normals_size=3, embed_dim=32, groups=1, res_expansion=0.25,
                    activation="relu", bias=False, use_xyz=False, normalize="anchor",
                    dim_expansion=[2, 2, 2, 1], pre_blocks=[1, 1, 2, 1], pos_blocks=[1, 1, 2, 1],
                    k_neighbors=[24,24,24,24], reducers=[2, 2, 2, 2], **kwargs)

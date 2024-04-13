@@ -154,14 +154,18 @@ class LocalGrouper(nn.Module):
     def forward(self, xyz, points):
         B, N, C = xyz.shape
         S = self.groups
-        xyz = xyz.contiguous()  # xyz [btach, points, xyz]
+        xyz = xyz.contiguous()  # xyz [batch, points, xyz]
 
         # fps_idx = torch.multinomial(torch.linspace(0, N - 1, steps=N).repeat(B, 1).to(xyz.device), num_samples=self.groups, replacement=False).long()
         # fps_idx = farthest_point_sample(xyz, self.groups).long()
+        # 对每个批次的1024个点进行采样，输出512个点
         fps_idx = pointnet2_utils.furthest_point_sample(xyz, self.groups).long()  # [B, npoint]
+        # 1024->512
         new_xyz = index_points(xyz, fps_idx)  # [B, npoint, 3]
+        #
         new_points = index_points(points, fps_idx)  # [B, npoint, d]
 
+        # 找到每个点对应的采样的512个点中最近的24个点
         idx = knn_point(self.kneighbors, xyz, new_xyz)
         # idx = query_ball_point(radius, nsample, xyz, new_xyz)
         grouped_xyz = index_points(xyz, idx)  # [B, npoint, k, 3]
@@ -361,8 +365,11 @@ def pointMLPElite(num_classes=40, **kwargs) -> Model:
 
 if __name__ == '__main__':
     data = torch.rand(2, 3, 1024)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    data.to(device)
     print("===> testing pointMLP ...")
     model = pointMLP()
+    model.to(device)
     out = model(data)
     print(out.shape)
 

@@ -101,7 +101,7 @@ def main():
                               batch_size=args.batch_size, shuffle=True, drop_last=True)
     test_loader = DataLoader(TeethPointCloudData(args, partition='test'), num_workers=args.num_workers,
                              batch_size=args.batch_size, shuffle=False, drop_last=False)
-    net = models.__dict__[args.get('model', 'pointMLPElite_hz')]()
+    net = models.__dict__[args.get('model', 'pointMLPElite_hz')](args.sample_groups)
     device = 'cuda'
     net = net.to(device)
     # optimizer = torch.optim.SGD(net.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
