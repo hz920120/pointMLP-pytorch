@@ -7,7 +7,6 @@ from os import path as osp
 from stl import mesh
 
 from torch.utils.data import Dataset
-from pointnet2_ops import pointnet2_utils
 import random
 
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
@@ -115,10 +114,7 @@ class TeethPointCloudData(Dataset):
         for i in list_files:
             teeth_mesh = mesh.Mesh.from_file(osp.join(self.path, 'meshes', i))
             xyz = torch.from_numpy(teeth_mesh.centroids[np.newaxis, :, :]).to(self.device)
-            if 'cpu' == self.device:
-                fps_idx = self.farthest_point_sample(xyz, self.sample_groups)
-            else:
-                fps_idx = pointnet2_utils.furthest_point_sample(xyz, self.sample_groups).long()
+            fps_idx = self.farthest_point_sample(xyz, self.sample_groups)
             xyz = self.index_points(xyz, fps_idx).squeeze(0).detach().cpu().numpy()
             normals = self.index_points(torch.from_numpy(teeth_mesh.normals[np.newaxis, :, :].copy()), fps_idx).squeeze(
                 0).detach().cpu().numpy()
