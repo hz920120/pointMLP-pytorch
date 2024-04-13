@@ -6,7 +6,6 @@ import torch.nn.functional as F
 # from einops import rearrange, repeat
 
 
-from pointnet2_ops import pointnet2_utils
 
 
 def get_activation(activation):
