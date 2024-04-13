@@ -41,8 +41,8 @@ def train(net, trainloader, optimizer, criterion, device, args):
     time_cost = datetime.datetime.now()
     for batch_idx, ((data, normals), label) in enumerate(tqdm(trainloader)):
         data, normals, label = data.to(device), normals.to(device), label.to(device).squeeze()
-        data = data.permute(0, 2, 1)  # so, the input data shape is [batch, 3, 4096]
-        normals = normals.permute(0, 2, 1)  # so, the input data shape is [batch, 3, 4096]
+        # data = data.permute(0, 2, 1)  # so, the input data shape is [batch, 3, 4096]
+        # normals = normals.permute(0, 2, 1)  # so, the input data shape is [batch, 3, 4096]
         optimizer.zero_grad()
         logits = net(data, normals)
         total_loss, l1_loss, cs_loss = criterion(logits, label, args.get('loss_weights_list', None))
@@ -84,8 +84,8 @@ def validate(net, testloader, device):
     with torch.no_grad():
         for batch_idx, ((data, normals), label) in enumerate(testloader):
             data, normals, label = data.to(device), normals.to(device), label.to(device).squeeze()
-            data = data.permute(0, 2, 1)  # so, the input data shape is [batch, 3, 4096]
-            normals = normals.permute(0, 2, 1)
+            # data = data.permute(0, 2, 1)  # so, the input data shape is [batch, 3, 4096]
+            # normals = normals.permute(0, 2, 1)
             logits = net(data, normals)
             similarity = cal_cossim(logits, label)
             avg_similarity += torch.mean(similarity).item()

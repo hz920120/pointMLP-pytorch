@@ -8,7 +8,7 @@ num_workers: 8
 model: 'pointMLP_hz'
 sample_groups: 2048
 learning_rate: 0.05
-loss_weights_list: [0.2, 0.8]
+loss_weights_list: [0.0, 1.0]
 log_path: "/hz/code/pointmlp/PointCloud_hz/checkpoints"
 model_name: "base_model"
 log_interval: 50
