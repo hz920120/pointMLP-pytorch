@@ -1,0 +1,12 @@
+batch_size: 8
+data_path: "/content/pointmlp/data/pointcloud/train"
+#model: 'pointMLP_hz'
+#model: 'pointMLPElite_hz'
+#model: 'pointMLP_elite_sampling'
+model: 'pointMLP_sampling'
+sample_groups: 4096
+learning_rate: 0.005
+epoch: 600
+log_interval: 60
+#model_name: "20240409_catpoints_1"
+model_name: "20240413_sampling"
