@@ -114,7 +114,7 @@ class TeethPointCloudData(Dataset):
         for i in list_files:
             teeth_mesh = mesh.Mesh.from_file(osp.join(self.path, 'meshes', i))
             xyz = torch.from_numpy(teeth_mesh.centroids[np.newaxis, :, :]).to(self.device)
-            fps_idx = self.farthest_point_sample(xyz, self.sample_groups)
+            fps_idx = self.farthest_point_sample(xyz, self.sample_groups).to(self.device)
             xyz = self.index_points(xyz, fps_idx).squeeze(0).detach().cpu().numpy()
             normals = self.index_points(torch.from_numpy(teeth_mesh.normals[np.newaxis, :, :].copy()), fps_idx).squeeze(
                 0).detach().cpu().numpy()
