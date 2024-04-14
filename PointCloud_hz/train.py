@@ -23,10 +23,14 @@ def parse_args():
                         help='config path', default='configs/test.yaml')
     parser.add_argument('-ckpt', '--checkpoint', type=str, metavar='PATH',
                         help='path to save checkpoint (default: checkpoint)', default=None)
+    parser.add_argument('--data_path', type=str, metavar='PATH',
+                        help='path to save checkpoint (default: checkpoint)', default=None)
     options = parser.parse_args()
     opts = CfgNode(CfgNode.load_yaml_with_base('configs/base.yaml'))
     opts.merge_from_file(options.config)
     opts.checkpoint = options.checkpoint
+    if options.data_path is not None:
+        opts.data_path = options.data_path
     return opts
 
 
