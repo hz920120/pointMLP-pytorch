@@ -7,6 +7,7 @@ import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
 from fvcore.common.config import CfgNode
+from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -129,6 +130,9 @@ def main():
         optimizer.load_state_dict(optim_ckpt)
 
     # scheduler = CosineAnnealingLR(optimizer, args.epoch, eta_min=args.min_lr, last_epoch=start_epoch - 1)
+    scheduler = StepLR(optimizer, step_size=200, gamma=0.5, last_epoch=-1)
+    for i in range(0, start_epoch):
+        scheduler.step()
     criterion = cal_total_loss
     writer = LogWriter(args.get('log_lath', './checkpoints'), args.model_name)
     for epoch in range(start_epoch, args.epoch):
@@ -148,7 +152,7 @@ def main():
         writer.scalar_summary(loss_dict, epoch)
         if (epoch + 1) % args.log_interval == 0:
             save_checkpoint(net, optimizer, args, epoch, loss_dict['total_loss'])
-        # scheduler.step()
+        scheduler.step()
     writer.close()
 
 

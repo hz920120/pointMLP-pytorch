@@ -17,11 +17,18 @@ from utils.utils import cal_cossim
 def parse_args():
     """Parameters"""
     parser = argparse.ArgumentParser('training')
-    parser.add_argument('-cg', '--config', type=str, metavar='PATH',
-                        help='path to save checkpoint (default: checkpoint)', default='configs/test_config_0413.yaml')
+    parser.add_argument('-c', '--config', type=str, metavar='PATH',
+                        help='path to save checkpoint (default: checkpoint)', default='configs/test_tanh_0414.yaml')
+    parser.add_argument('-ckpt', '--checkpoint', type=str, metavar='PATH',
+                        help='path to save checkpoint (default: checkpoint)', default=None)
+    parser.add_argument('--data_path', type=str, metavar='PATH',
+                        help='path to save checkpoint (default: checkpoint)', default=None)
     options = parser.parse_args()
     opts = CfgNode(CfgNode.load_yaml_with_base('configs/base.yaml'))
     opts.merge_from_file(options.config)
+    opts.checkpoint = options.checkpoint
+    if options.data_path is not None:
+        opts.data_path = options.data_path
     return opts
 
 
@@ -42,6 +49,7 @@ def validate(net, testloader, device):
 
 def main():
     args = parse_args()
+    args.batch_size = 1
     if torch.cuda.is_available():
         device = 'cuda'
     else:
@@ -59,7 +67,7 @@ def main():
     net = models.__dict__[args.model](args.sample_groups)
     net = net.to(device)
     # checkpoint_path = os.path.join(args.checkpoint, 'best_checkpoint.pth')
-    checkpoint_path = "/hz/code/pointmlp/PointCloud_hz/checkpoints/20240414_tanh_0.01/checkpoint_59_0.74.pth"
+    checkpoint_path = "/hz/code/pointmlp/PointCloud_hz/checkpoints/20240414_tanh_nms_pts_0.002/checkpoint_479_0.06.pth"
     checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
     # criterion = criterion.to(device)
     if device == 'cuda':
