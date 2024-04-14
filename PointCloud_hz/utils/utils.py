@@ -19,13 +19,15 @@ class LogWriter:
         self.writer.close()
 
 
-def save_checkpoint(model, path, model_name, epoch, total_loss):
+def save_checkpoint(model, optimizer, args, epoch, total_loss):
     pth = {
         'epoch': epoch,
         'net': model.state_dict(),
-        'total_loss': total_loss
+        'optimizer': optimizer.state_dict(),
+        'total_loss': total_loss,
+        'args': args
     }
-    save_path = os.path.join(path, model_name)
+    save_path = os.path.join(args.log_path, args.model_name)
     os.makedirs(save_path, exist_ok=True)
     torch.save(pth, os.path.join(save_path, 'checkpoint' + '_{}_{:.2f}.pth').format(epoch, total_loss))
 

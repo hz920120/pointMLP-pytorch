@@ -19,11 +19,14 @@ from utils.utils import LogWriter, save_checkpoint, get_total_params, get_total_
 def parse_args():
     """Parameters"""
     parser = argparse.ArgumentParser('training')
-    parser.add_argument('-cg', '--config', type=str, metavar='PATH',
-                        help='path to save checkpoint (default: checkpoint)', default='configs/test.yaml')
+    parser.add_argument('-c', '--config', type=str, metavar='PATH',
+                        help='config path', default='configs/test.yaml')
+    parser.add_argument('-ckpt', '--checkpoint', type=str, metavar='PATH',
+                        help='path to save checkpoint (default: checkpoint)', default=None)
     options = parser.parse_args()
     opts = CfgNode(CfgNode.load_yaml_with_base('configs/base.yaml'))
     opts.merge_from_file(options.config)
+    opts.checkpoint = options.checkpoint
     return opts
 
 
@@ -45,7 +48,7 @@ def train(net, trainloader, optimizer, criterion, device, args):
         # normals = normals.permute(0, 2, 1)  # so, the input data shape is [batch, 3, 4096]
         optimizer.zero_grad()
         logits = net(data, normals)
-        total_loss, l1_loss, cs_loss = criterion(logits, label, args.get('use_L1', None), args.get('loss_weights_list', None))
+        total_loss, l1_loss, cs_loss = criterion(logits, label, args.get('use_L1', False), args.get('loss_weights_list', None))
         total_loss.backward()
         # torch.nn.utils.clip_grad_norm_(net.parameters(), 1)
         optimizer.step()
@@ -97,16 +100,30 @@ def validate(net, testloader, device):
 
 def main():
     args = parse_args()
-    train_loader = DataLoader(TeethPointCloudData(args, partition='train'), num_workers=args.num_workers,
+    print("*" * 50)
+    print(args)
+    print("*" * 50)
+    train_loader = DataLoader(TeethPointCloudData(args, partition='test'), num_workers=args.num_workers,
                               batch_size=args.batch_size, shuffle=True, drop_last=True)
     test_loader = DataLoader(TeethPointCloudData(args, partition='test'), num_workers=args.num_workers,
                              batch_size=args.batch_size, shuffle=False, drop_last=False)
     net = models.__dict__[args.get('model', 'pointMLPElite_hz')](args.sample_groups)
     device = 'cuda'
+    optim_ckpt = None
+    start_epoch = 0
+    if args.checkpoint is not None:
+        checkpoint = torch.load(args.checkpoint, map_location=torch.device('cpu'))
+        net.load_state_dict(checkpoint['net'])
+        optim_ckpt = checkpoint.get('optimizer', None)
+        start_epoch = checkpoint['epoch'] + 1
+        print("=> loaded old args '{}' , ".format(checkpoint.get('args', None)))
+        print("=> loaded model epoch: '{}' , total_loss: '{}' ".format(checkpoint['epoch'], checkpoint['total_loss']))
     net = net.to(device)
     # optimizer = torch.optim.SGD(net.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
     optimizer = torch.optim.SGD(net.parameters(), lr=args.learning_rate, momentum=0.9)
-    start_epoch = 0
+    if optim_ckpt is not None:
+        optimizer.load_state_dict(optim_ckpt)
+
     # scheduler = CosineAnnealingLR(optimizer, args.epoch, eta_min=args.min_lr, last_epoch=start_epoch - 1)
     criterion = cal_total_loss
     writer = LogWriter(args.get('log_lath', './checkpoints'), args.model_name)
@@ -125,7 +142,7 @@ def main():
 
         writer.scalar_summary(loss_dict, epoch)
         if (epoch + 1) % args.log_interval == 0:
-            save_checkpoint(net, args.log_path, args.model_name, epoch, loss_dict['total_loss'])
+            save_checkpoint(net, optimizer, args, epoch, loss_dict['total_loss'])
         # scheduler.step()
     writer.close()
 

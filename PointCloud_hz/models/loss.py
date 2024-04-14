@@ -32,6 +32,7 @@ class L1Loss(nn.Module):
     def forward(self, pred, gt):
         norm = torch.norm(pred, dim=1)
         loss = self.loss_f(pred / norm[:, None], gt)
+        # torch.mean(torch.mean(torch.abs(pred_norm - gt), dim=1))
         return loss
 
 
@@ -65,7 +66,7 @@ def cal_loss_hinge(pred, gt):
 
 def cal_total_loss(pred, gt, use_L1=False, weights_list=None):
     if weights_list is None:
-        weights_list = [0.8, 0.2]
+        weights_list = [0.2, 0.8]
     if use_L1:
         l1 = L1Loss()
         l1_loss = weights_list[0] * l1(pred, gt)
