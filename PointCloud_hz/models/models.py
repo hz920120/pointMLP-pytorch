@@ -14,7 +14,8 @@ class Model(nn.Module):
         self.stages = len(pre_blocks)
         self.points = points
         self.embedding1 = ConvBNReLU1D(3, embed_dim // 2, bias=bias, activation=activation)
-        self.embedding2 = ConvBNReLU1D(3, embed_dim, bias=bias, activation=activation)
+        # self.embedding2 = ConvBNReLU1D(3, embed_dim, bias=bias, activation=activation)
+        self.embedding2 = ConvBNReLU1D(3, embed_dim // 2, bias=bias, activation=activation)
         # self.embedding2 = ConvBNReLU1D(embed_dim * 2, embed_dim, bias=bias, activation=activation)
         assert len(pre_blocks) == len(k_neighbors) == len(reducers) == len(pos_blocks) == len(dim_expansion), \
             "Please check stage number consistent for pre_blocks, pos_blocks k_neighbors, reducers."
@@ -73,11 +74,11 @@ class Model(nn.Module):
     def forward(self, pts, normals):
         x = pts.permute(0, 2, 1)
         normals = normals.permute(0, 2, 1)
-        # point_features = self.embedding1(x)  # B,D,N
-        # normal_features = self.embedding2(normals)
-        data = self.embedding2(normals)
+        point_features = self.embedding1(x)  # B,D,N
+        normal_features = self.embedding2(normals)
+        # data = self.embedding2(normals)
         # data = self.embedding2(torch.concat([point_features, normal_features], dim=-2))
-        # data = torch.concat([point_features, normal_features], dim=-2)
+        data = torch.concat([point_features, normal_features], dim=-2)
         for i in range(self.stages):
             pts, data = self.group_blocks_list[i](pts, data.permute(0, 2, 1))
             # data = self.sampling_blocks_list[i](data)

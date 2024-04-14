@@ -134,8 +134,6 @@ def main():
     for epoch in range(start_epoch, args.epoch):
         print('Epoch(%d/%s) Learning Rate %s:' % (epoch + 1, args.epoch, optimizer.param_groups[0]['lr']))
         loss_dict = train(net, train_loader, optimizer, criterion, device, args)
-        if (epoch + 1) % 10 == 0:
-            validate(net, test_loader, device)
         print(
             'Epoch {}/{}, train_total_loss: {:.4f}, l1_total_loss: {:.4f}, '
             'cs_total_loss: {:.4f}'.format(
@@ -143,6 +141,9 @@ def main():
                 args.epoch, loss_dict['total_loss'], loss_dict['l1_total'],
                 loss_dict['cs_total'])
         )
+
+        if (epoch + 1) % 10 == 0:
+            validate(net, test_loader, device)
 
         writer.scalar_summary(loss_dict, epoch)
         if (epoch + 1) % args.log_interval == 0:
