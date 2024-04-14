@@ -1,4 +1,4 @@
-batch_size: 8
+batch_size: 16
 data_path: "/kaggle/input/pc-tooth/pointcloud/train"
 log_path: "/kaggle/working/checkpoints"
 #model: 'pointMLP_hz'
@@ -10,4 +10,5 @@ learning_rate: 0.005
 epoch: 600
 log_interval: 60
 #model_name: "20240409_catpoints_1"
-model_name: "20240413_sampling"
+model_name: "20240414_tanh_useL1_16_0.005"
+use_L1: true

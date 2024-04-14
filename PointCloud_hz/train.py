@@ -20,7 +20,7 @@ def parse_args():
     """Parameters"""
     parser = argparse.ArgumentParser('training')
     parser.add_argument('-cg', '--config', type=str, metavar='PATH',
-                        help='path to save checkpoint (default: checkpoint)', default='configs/test_config_0331.yaml')
+                        help='path to save checkpoint (default: checkpoint)', default='configs/test.yaml')
     options = parser.parse_args()
     opts = CfgNode(CfgNode.load_yaml_with_base('configs/base.yaml'))
     opts.merge_from_file(options.config)
@@ -45,7 +45,7 @@ def train(net, trainloader, optimizer, criterion, device, args):
         # normals = normals.permute(0, 2, 1)  # so, the input data shape is [batch, 3, 4096]
         optimizer.zero_grad()
         logits = net(data, normals)
-        total_loss, l1_loss, cs_loss = criterion(logits, label, args.get('loss_weights_list', None))
+        total_loss, l1_loss, cs_loss = criterion(logits, label, args.get('use_L1', None), args.get('loss_weights_list', None))
         total_loss.backward()
         # torch.nn.utils.clip_grad_norm_(net.parameters(), 1)
         optimizer.step()
@@ -97,7 +97,7 @@ def validate(net, testloader, device):
 
 def main():
     args = parse_args()
-    train_loader = DataLoader(TeethPointCloudData(args), num_workers=args.num_workers,
+    train_loader = DataLoader(TeethPointCloudData(args, partition='train'), num_workers=args.num_workers,
                               batch_size=args.batch_size, shuffle=True, drop_last=True)
     test_loader = DataLoader(TeethPointCloudData(args, partition='test'), num_workers=args.num_workers,
                              batch_size=args.batch_size, shuffle=False, drop_last=False)

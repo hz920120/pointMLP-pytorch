@@ -74,6 +74,8 @@ def get_activation(activation):
         return nn.Hardswish(inplace=True)
     elif activation.lower() == 'leakyrelu':
         return nn.LeakyReLU(inplace=True)
+    elif activation.lower() == 'tanh':
+        return nn.Tanh()
     else:
         return nn.ReLU(inplace=True)
 

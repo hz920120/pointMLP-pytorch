@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 from .util import *
 
 
@@ -13,6 +14,7 @@ class Model(nn.Module):
         self.stages = len(pre_blocks)
         self.points = points
         self.embedding1 = ConvBNReLU1D(3, embed_dim // 2, bias=bias, activation=activation)
+        self.embedding2 = ConvBNReLU1D(3, embed_dim, bias=bias, activation=activation)
         # self.embedding2 = ConvBNReLU1D(embed_dim * 2, embed_dim, bias=bias, activation=activation)
         assert len(pre_blocks) == len(k_neighbors) == len(reducers) == len(pos_blocks) == len(dim_expansion), \
             "Please check stage number consistent for pre_blocks, pos_blocks k_neighbors, reducers."
@@ -60,22 +62,38 @@ class Model(nn.Module):
             nn.Dropout(0.5),
             nn.Linear(128, 3)
         )
+        # self.normal_aligner = nn.Sequential(
+        #     ConvBNReLU1D(in_channels=last_channel, out_channels=128, kernel_size=1, bias=False),
+        #     ConvBNReLU1D(in_channels=128, out_channels=64, kernel_size=1, bias=False),
+        #     ConvBNReLU1D(in_channels=64, out_channels=32, kernel_size=1, bias=False),
+        #     ConvBNReLU1D(in_channels=32, out_channels=16, kernel_size=1, bias=False),
+        #     ConvBNReLU1D(in_channels=16, out_channels=3, kernel_size=1, bias=False),
+        # )
 
     def forward(self, pts, normals):
         x = pts.permute(0, 2, 1)
         normals = normals.permute(0, 2, 1)
-        point_features = self.embedding1(x)  # B,D,N
-        normal_features = self.embedding1(normals)
+        # point_features = self.embedding1(x)  # B,D,N
+        # normal_features = self.embedding2(normals)
+        data = self.embedding2(normals)
         # data = self.embedding2(torch.concat([point_features, normal_features], dim=-2))
-        data = torch.concat([point_features, normal_features], dim=-2)
+        # data = torch.concat([point_features, normal_features], dim=-2)
         for i in range(self.stages):
             pts, data = self.group_blocks_list[i](pts, data.permute(0, 2, 1))
-            data = self.sampling_blocks_list[i](data)
+            # data = self.sampling_blocks_list[i](data)
             data = self.pre_blocks_list[i](data)
             data = self.pos_blocks_list[i](data)
 
-        data = F.adaptive_max_pool1d(data, 1).squeeze(dim=-1)
-        data = self.classifier(data)
+        # data = self.normal_aligner(data)
+        # data = F.adaptive_max_pool1d(data, 1).squeeze(dim=-1)
+        # return data
+
+        # data = F.adaptive_max_pool1d(data, 1).squeeze(dim=-1)
+        # data = self.classifier(data)
+        data = self.classifier(data.transpose(1,2).reshape(-1,512))
+        # data = F.adaptive_max_pool1d(data.reshape(2,-1,3).transpose(1,2), 1).squeeze(-1)
+        # data = F.adaptive_max_pool1d(data.reshape(2,-1,3).transpose(1,2), 1).squeeze(-1)
+        data = F.adaptive_avg_pool1d(data.reshape(-1,256, 3).transpose(1,2), 1).squeeze(-1)
         return data
 
 
@@ -217,6 +235,9 @@ class GrouperBlock(nn.Module):
         new_points = torch.cat([grouped_points, new_points.view(B, S, 1, -1).repeat(1, 1, self.kneighbors, 1)], dim=-1)
         return new_xyz, new_points
 
+    def save_pc(self, points):
+        np.savetxt('/hz/code/pointmlp/PointCloud_hz/checkpoints/data1.txt', points)
+
 
 class SamplingBlock(nn.Module):
     def __init__(self, channel=128, maxpool=True, act='relu'):
@@ -226,14 +247,15 @@ class SamplingBlock(nn.Module):
         # channels = [128, 64, 16, 4]
         channel *= 2
         channels = [channel, channel // 2, channel // 8, channel // 16]
-        self.pool = nn.MaxPool1d(channel // 16) if maxpool else nn.AvgPool1d(channel // 16)
+        # self.pool = nn.MaxPool1d(channel // 16) if maxpool else nn.AvgPool1d(channel // 16)
 
         down_list = [ConvBNReLU1D(channels[0], channels[0], activation=act)]
         for i in range(len(channels) - 1):
             down_list.append(ConvBNReLU1D(channels[i], channels[i + 1], activation=act))
         self.down_sample = nn.Sequential(*down_list)
 
-        up_list = [ConvTransposeBNReLU1D(1, channels[-1], activation=act)]
+        up_list = [ConvTransposeBNReLU1D(channels[-1], channels[-1], activation=act)]
+        # up_list = [ConvTransposeBNReLU1D(1, channels[-1], activation=act)]
         for i in range(len(channels) - 1, 0, -1):
             up_list.append(ConvTransposeBNReLU1D(channels[i], channels[i - 1], activation=act))
         self.up_sample = nn.Sequential(*up_list)
@@ -242,8 +264,9 @@ class SamplingBlock(nn.Module):
         b, n, k, f = x.size()
         x = x.view(-1, f, k)
         x = self.down_sample(x)
-        x = self.pool(x.permute(0, 2, 1))
-        x = self.up_sample(x.permute(0, 2, 1))
+        # x = self.pool(x.permute(0, 2, 1))
+        # x = self.up_sample(x.permute(0, 2, 1))
+        x = self.up_sample(x)
         x = x.reshape(b, n, f, k).transpose(-1, -2)
         # B N K F(batch, N points, Knn, Features)
         return x
@@ -305,16 +328,16 @@ class PosBlock(nn.Module):
 
 
 def pointMLP_sampling(points, **kwargs) -> Model:
-    model = Model(points=points, embed_dim=32, groups=1, res_expansion=1.0,
-                  activation="relu", bias=False, use_xyz=False, normalize="anchor",
+    model = Model(points=points, maxpool=False, embed_dim=32, groups=1, res_expansion=1.0,
+                  activation="tanh", bias=False, use_xyz=False, normalize="anchor",
                   dim_expansion=[2, 2, 2, 2], pre_blocks=[2, 2, 2, 2], pos_blocks=[2, 2, 2, 2],
                   k_neighbors=[12, 12, 12, 12], reducers=[2, 2, 2, 2])
     return model
 
 
 def pointMLP_elite_sampling(points, **kwargs) -> Model:
-    model = Model(points=points, embed_dim=32, groups=1, res_expansion=1.0,
-                  activation="relu", bias=False, use_xyz=False, normalize="anchor",
+    model = Model(points=points, maxpool=False, embed_dim=32, groups=1, res_expansion=1.0,
+                  activation="tanh", bias=False, use_xyz=False, normalize="anchor",
                   dim_expansion=[2, 2, 2, 1], pre_blocks=[1, 1, 2, 1], pos_blocks=[1, 1, 2, 1],
                   k_neighbors=[12, 12, 12, 12], reducers=[2, 2, 2, 2])
     return model
@@ -358,8 +381,32 @@ def test_model():
     res = model(pts, normals)
 
 
+def test_out():
+    class Mod(nn.Module):
+        def __init__(self):
+            super(Mod, self).__init__()
+            self.conv1 = ConvBNReLU1D(in_channels=64, out_channels=32, kernel_size=1, bias=False)
+            self.conv2 = ConvBNReLU1D(in_channels=32, out_channels=16, kernel_size=1, bias=False)
+            self.conv3 = ConvBNReLU1D(in_channels=16, out_channels=8, kernel_size=1, bias=False)
+            self.conv4 = ConvBNReLU1D(in_channels=8, out_channels=3, kernel_size=1, bias=False)
+
+        def forward(self, x):
+            x = self.conv1(x)
+            x = self.conv2(x)
+            x = self.conv3(x)
+            x = self.conv4(x)
+            F.adaptive_max_pool1d(x, 1).squeeze()
+            return x
+
+    data = torch.rand(2, 512, 64)
+    m = Mod()
+    res = m(data.permute(0, 2, 1))
+    print(1)
+
+
 if __name__ == '__main__':
     # test_grouper()
     # test_sampling_block()
     test_model()
+    # test_out()
     print(1)

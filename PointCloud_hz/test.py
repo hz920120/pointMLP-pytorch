@@ -18,7 +18,7 @@ def parse_args():
     """Parameters"""
     parser = argparse.ArgumentParser('training')
     parser.add_argument('-cg', '--config', type=str, metavar='PATH',
-                        help='path to save checkpoint (default: checkpoint)', default='configs/test_config_0408.yaml')
+                        help='path to save checkpoint (default: checkpoint)', default='configs/test_config_0413.yaml')
     options = parser.parse_args()
     opts = CfgNode(CfgNode.load_yaml_with_base('configs/base.yaml'))
     opts.merge_from_file(options.config)
@@ -31,8 +31,8 @@ def validate(net, testloader, device):
     with torch.no_grad():
         for batch_idx, ((data, normals), label) in enumerate(testloader):
             data, normals, label = data.to(device), normals.to(device), label.to(device).squeeze()
-            data = data.permute(0, 2, 1)  # so, the input data shape is [batch, 3, 4096]
-            normals = normals.permute(0, 2, 1)
+            # data = data.permute(0, 2, 1)  # so, the input data shape is [batch, 3, 4096]
+            # normals = normals.permute(0, 2, 1)
             logits = net(data, normals)
             similarity = cal_cossim(logits, label)
             avg_similarity += torch.mean(similarity).item()
@@ -59,7 +59,7 @@ def main():
     net = models.__dict__[args.model](args.sample_groups)
     net = net.to(device)
     # checkpoint_path = os.path.join(args.checkpoint, 'best_checkpoint.pth')
-    checkpoint_path = "/hz/code/pointmlp/PointCloud_hz/checkpoints/20240410_catpoints_avgpool/checkpoint_539_2.66.pth"
+    checkpoint_path = "/hz/code/pointmlp/PointCloud_hz/checkpoints/20240414_tanh_0.01/checkpoint_59_0.74.pth"
     checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
     # criterion = criterion.to(device)
     if device == 'cuda':

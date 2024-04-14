@@ -63,13 +63,17 @@ def cal_loss_hinge(pred, gt):
     return loss
 
 
-def cal_total_loss(pred, gt, weights_list=None):
+def cal_total_loss(pred, gt, use_L1=False, weights_list=None):
     if weights_list is None:
         weights_list = [0.8, 0.2]
-
-    l1 = L1Loss()
-    l1_loss = weights_list[0] * l1(pred, gt)
-    cs = CosineSimilarityLoss()
-    cs_loss = weights_list[1] * cs(pred, gt)
-
-    return l1_loss + cs_loss, l1_loss, cs_loss
+    if use_L1:
+        l1 = L1Loss()
+        l1_loss = weights_list[0] * l1(pred, gt)
+        cs = CosineSimilarityLoss()
+        cs_loss = weights_list[1] * cs(pred, gt)
+        return l1_loss + cs_loss, l1_loss, cs_loss
+    else:
+        l1_loss = torch.tensor(0.0)
+        cs = CosineSimilarityLoss()
+        cs_loss = cs(pred, gt)
+        return cs_loss, l1_loss, cs_loss

@@ -344,6 +344,12 @@ class Model(nn.Module):
             last_channel = out_channel
 
         self.act = get_activation(activation)
+        self.normal_aligner = nn.Sequential(
+            ConvBNReLU1D(in_channels=last_channel//2, out_channels=128, kernel_size=1, bias=False),
+            ConvBNReLU1D(in_channels=128, out_channels=64, kernel_size=1, bias=False),
+            ConvBNReLU1D(in_channels=64, out_channels=16, kernel_size=1, bias=False),
+            ConvBNReLU1D(in_channels=16, out_channels=3, kernel_size=1, bias=False),
+        )
         self.classifier = nn.Sequential(
             nn.Linear(last_channel, 256),
             nn.BatchNorm1d(256),
