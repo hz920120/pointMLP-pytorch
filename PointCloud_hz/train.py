@@ -1,6 +1,8 @@
 import argparse
 import datetime
+import random
 
+import numpy as np
 import torch
 import torch.nn.parallel
 import torch.optim
@@ -102,8 +104,15 @@ def validate(net, testloader, device):
     print("Average similarity is: {:.4f}".format(avg_similarity))
     print('*' * 50)
 
+def setup_seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
 
 def main():
+    setup_seed(20)
     args = parse_args()
     print("*" * 50)
     print(args)
@@ -130,7 +139,8 @@ def main():
         optimizer.load_state_dict(optim_ckpt)
 
     # scheduler = CosineAnnealingLR(optimizer, args.epoch, eta_min=args.min_lr, last_epoch=start_epoch - 1)
-    scheduler = StepLR(optimizer, step_size=200, gamma=0.5, last_epoch=-1)
+    optimizer.param_groups[0]['lr'] = args.learning_rate
+    scheduler = StepLR(optimizer, step_size=args.step_size, gamma=0.5, last_epoch=-1)
     for i in range(0, start_epoch):
         scheduler.step()
     criterion = cal_total_loss

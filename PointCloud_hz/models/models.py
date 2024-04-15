@@ -91,10 +91,11 @@ class Model(nn.Module):
 
         # data = F.adaptive_max_pool1d(data, 1).squeeze(dim=-1)
         # data = self.classifier(data)
-        data = self.classifier(data.transpose(1,2).reshape(-1,512))
+        b, f, n = data.shape
+        data = self.classifier(data.transpose(1,2).reshape(-1, f))
         # data = F.adaptive_max_pool1d(data.reshape(2,-1,3).transpose(1,2), 1).squeeze(-1)
         # data = F.adaptive_max_pool1d(data.reshape(2,-1,3).transpose(1,2), 1).squeeze(-1)
-        data = F.adaptive_avg_pool1d(data.reshape(-1,256, 3).transpose(1,2), 1).squeeze(-1)
+        data = F.adaptive_avg_pool1d(data.reshape(b, n, 3).transpose(1,2), 1).squeeze(-1)
         return data
 
 
@@ -343,6 +344,20 @@ def pointMLP_elite_sampling(points, **kwargs) -> Model:
                   k_neighbors=[12, 12, 12, 12], reducers=[2, 2, 2, 2])
     return model
 
+
+def pointMLP_small_sampling(points, **kwargs) -> Model:
+    model = Model(points=points, maxpool=False, embed_dim=32, groups=1, res_expansion=1.0,
+                  activation="tanh", bias=False, use_xyz=False, normalize="anchor",
+                  dim_expansion=[2, 2], pre_blocks=[1, 2], pos_blocks=[1, 2],
+                  k_neighbors=[12, 12], reducers=[2, 2])
+    return model
+
+def pointMLP_medium_sampling(points, **kwargs) -> Model:
+    model = Model(points=points, maxpool=False, embed_dim=64, groups=1, res_expansion=1.0,
+                  activation="tanh", bias=False, use_xyz=False, normalize="anchor",
+                  dim_expansion=[2, 2], pre_blocks=[1, 2], pos_blocks=[1, 2],
+                  k_neighbors=[24, 24], reducers=[2, 2])
+    return model
 
 def test_grouper():
     grouper = GrouperBlock(channel=32, groups=512, kneighbors=24, use_xyz=False, normalize="anchor")

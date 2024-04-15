@@ -89,6 +89,11 @@ class ModelNet40(Dataset):
         return self.data.shape[0]
 
 
+def print_files(data):
+    for file_name in data:
+        print(file_name.split('.')[0])
+
+
 class TeethPointCloudData(Dataset):
     def __init__(self, args, partition='train', device='cuda', split_factor=0.9):
         self.partition = partition
@@ -105,7 +110,6 @@ class TeethPointCloudData(Dataset):
         split_index = int(len(list_files) * self.split_factor)
         self.train_data = list_files[:split_index]
         self.test_data = list_files[split_index:]
-
 
     def load_teethpc(self):
         list_files = self.train_data if self.partition == 'train' else self.test_data
@@ -127,6 +131,7 @@ class TeethPointCloudData(Dataset):
             label = np.loadtxt(osp.join(self.path, 'labels', i.split('.')[0] + '.txt'), dtype=np.float32)
             all_labels.append(label)
         return all_data, all_labels
+
     def save_pc(self, points):
         np.savetxt('/hz/code/pointmlp/PointCloud_hz/checkpoints/data1.txt', points)
 
