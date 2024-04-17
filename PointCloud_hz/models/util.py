@@ -135,6 +135,56 @@ def index_points(points, idx):
     return new_points
 
 
+def index_all_points(points, idx):
+    """
+    Input:
+        points: input points data, [B, N, C]
+        idx: sample index data, [B, S]
+    Return:
+        new_points:, indexed points data, [B, S, C]
+    """
+    device = points.device
+    B = points.shape[0]
+    view_shape = list(idx.shape)
+    view_shape[1:] = [1] * (len(view_shape))
+    repeat_shape = list(idx.shape)
+    repeat_shape[0] = 1
+    repeat_shape.insert(1, points.shape[1])
+    points = points.unsqueeze(1).repeat(1, points.shape[1], 1, 1)
+    batch_indices = torch.arange(B, dtype=torch.long).to(device).view(view_shape).repeat(repeat_shape)
+    new_points = points[:,batch_indices, idx, :]
+    return new_points
+
+
+def construct_nearest_neighbor_tensor(original_clouds: torch.Tensor,
+                                      sampled_points: torch.Tensor,
+                                      nearest_neighbors: torch.Tensor) -> torch.Tensor:
+    """
+    Given original point clouds, sampled points, and their nearest neighbors,
+    constructs a 5D tensor representing the coordinates of the nearest neighbors.
+
+    Args:
+        original_clouds (torch.Tensor): Original point clouds with shape (2, 2048, 3).
+        sampled_points (torch.Tensor): Sampled points' indices with shape (2, 512).
+        nearest_neighbors (torch.Tensor): Nearest neighbor indices with shape (2, 512, 12).
+
+    Returns:
+        torch.Tensor: A 5D tensor of shape (2, 2048, 512, 12, 3) representing the coordinates
+                      of the nearest neighbors.
+    """
+
+    # Expand dimensions to match the desired output shape
+    original_clouds_expanded = original_clouds.unsqueeze(dim=2).unsqueeze(dim=3)  # Shape: (2, 2048, 1, 1, 3)
+    sampled_points_expanded = sampled_points.unsqueeze(dim=1)[...,None,None,None,None] # Shape: (2, 1, 512, 1, 1, 1, 1)
+    nearest_neighbors_expanded = nearest_neighbors.unsqueeze(dim=1).unsqueeze(dim=1)[...,None,None,None,None] # Shape: (2, 1, 1, 512, 12, 1, 1, 1, 1)
+
+    # Compute the coordinates of the nearest neighbors by indexing into the expanded original clouds
+    nearest_neighbor_coordinates = original_clouds_expanded[
+                                   sampled_points_expanded, :, nearest_neighbors_expanded, :, :, :, :, :, :]
+
+    return nearest_neighbor_coordinates
+
+
 def farthest_point_sample(xyz, npoint):
     """
     Input:
